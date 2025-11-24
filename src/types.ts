@@ -20,9 +20,9 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
-  type: 'static' | 'moving' | 'breaking';
+  type: 'static' | 'moving' | 'boost';
   vx: number; // For moving platforms
-  active: boolean; // For breaking platforms
+  active: boolean; // Kept for compatibility, though boost/static/moving usually stay active
 }
 
 export interface RobotPersona {

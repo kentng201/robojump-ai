@@ -49,6 +49,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const scoreRef = useRef<number>(0);
   const cameraYRef = useRef<number>(0);
   const keysRef = useRef<{ [key: string]: boolean }>({});
+  const timeScaleRef = useRef<number>(1); // Controls slow motion
   
   // Initialize inputs
   useEffect(() => {
@@ -121,6 +122,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     
     scoreRef.current = 0;
     cameraYRef.current = 0;
+    timeScaleRef.current = 1;
     keysRef.current = {}; // Reset keys
     
     // Create initial platforms
@@ -146,10 +148,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const generatePlatform = (y: number): Platform => {
     const typeRandom = Math.random();
-    let type: 'static' | 'moving' | 'breaking' = 'static';
+    let type: 'static' | 'moving' | 'boost' = 'static';
     
     if (scoreRef.current > 1000 && typeRandom > 0.7) type = 'moving';
-    if (scoreRef.current > 2000 && typeRandom > 0.9) type = 'breaking';
+    if (scoreRef.current > 2000 && typeRandom > 0.9) type = 'boost';
 
     const width = Math.random() * (PHYSICS.PLATFORM_WIDTH_MAX - PHYSICS.PLATFORM_WIDTH_MIN) + PHYSICS.PLATFORM_WIDTH_MIN;
     const x = Math.random() * (GAME_WIDTH - width);
@@ -170,27 +172,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (gameState !== GameState.PLAYING) return;
 
     const player = playerRef.current;
+    const dt = timeScaleRef.current;
     
-    // Physics: Gravity
-    player.vy += PHYSICS.GRAVITY;
+    // Physics: Gravity (scaled by dt)
+    player.vy += PHYSICS.GRAVITY * dt;
 
-    // Physics: Horizontal Movement (Acceleration based)
+    // Physics: Horizontal Movement (Acceleration based, scaled by dt)
     if (keysRef.current['ArrowLeft']) {
-      player.vx -= PHYSICS.ACCELERATION;
+      player.vx -= PHYSICS.ACCELERATION * dt;
       if (player.vx < -PHYSICS.MAX_SPEED) player.vx = -PHYSICS.MAX_SPEED;
       player.facingRight = false;
     } else if (keysRef.current['ArrowRight']) {
-      player.vx += PHYSICS.ACCELERATION;
+      player.vx += PHYSICS.ACCELERATION * dt;
       if (player.vx > PHYSICS.MAX_SPEED) player.vx = PHYSICS.MAX_SPEED;
       player.facingRight = true;
     } else {
-      player.vx *= PHYSICS.FRICTION; // Friction
+      // Friction scaled by dt (Exponential decay approximation for variable time step)
+      player.vx *= Math.pow(PHYSICS.FRICTION, dt); 
       if (Math.abs(player.vx) < 0.1) player.vx = 0;
     }
 
-    // Apply movement
-    player.x += player.vx;
-    player.y += player.vy;
+    // Apply movement (scaled by dt)
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
 
     // Wrap around screen X
     if (player.x + player.width < 0) player.x = GAME_WIDTH;
@@ -210,9 +214,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Platform Logic
     platformsRef.current.forEach(p => {
-      // Move moving platforms
+      // Move moving platforms (scaled by dt)
       if (p.type === 'moving') {
-        p.x += p.vx;
+        p.x += p.vx * dt;
         if (p.x < 0 || p.x + p.width > GAME_WIDTH) p.vx *= -1;
       }
     });
@@ -244,16 +248,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         // Simple AABB collision for feet
         if (
           player.y + player.height > p.y &&
-          player.y + player.height < p.y + p.height + player.vy + 2 && // tolerance
+          player.y + player.height < p.y + p.height + player.vy + 2 + (p.type === 'boost' ? 10 : 0) && // tolerance
           player.x + player.width > p.x &&
           player.x < p.x + p.width
         ) {
-          if (p.type === 'breaking') {
-            p.active = false; // Break it
-            player.vy = PHYSICS.JUMP_FORCE * 0.5;
+          // Reset slow motion on any landing
+          timeScaleRef.current = 1;
+
+          if (p.type === 'boost') {
+            // Massive jump
+            player.vy = PHYSICS.BOOST_FORCE;
+            // Trigger slow motion
+            timeScaleRef.current = PHYSICS.SLOW_MOTION_SCALE;
             playJumpSound();
           } else {
-            // Bounce
+            // Normal Bounce
             player.vy = PHYSICS.JUMP_FORCE;
             playJumpSound();
           }
@@ -287,7 +296,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       if (p.type === 'static') ctx.fillStyle = COLORS.PLATFORM_STATIC;
       else if (p.type === 'moving') ctx.fillStyle = COLORS.PLATFORM_MOVING;
-      else if (p.type === 'breaking') ctx.fillStyle = COLORS.PLATFORM_BREAKING;
+      else if (p.type === 'boost') ctx.fillStyle = COLORS.PLATFORM_BOOST;
       
       // Rounded rect style
       ctx.fillRect(p.x, p.y, p.width, p.height);
@@ -295,6 +304,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       // Detail lines
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.fillRect(p.x, p.y, p.width, 4);
+
+      // Boost platform indicator
+      if (p.type === 'boost') {
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.beginPath();
+          ctx.moveTo(p.x + p.width/2, p.y + 4);
+          ctx.lineTo(p.x + p.width/2 - 5, p.y + 12);
+          ctx.lineTo(p.x + p.width/2 + 5, p.y + 12);
+          ctx.fill();
+      }
     });
 
     // Draw Player (The Robot)
@@ -333,6 +352,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.fillStyle = '#4B5563';
     ctx.fillRect(p.x + 5, p.y + p.height, 8, legLength);
     ctx.fillRect(p.x + p.width - 13, p.y + p.height, 8, legLength);
+
+    // Draw speed lines if slow motion (boosted)
+    if (timeScaleRef.current < 1) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 2;
+        for(let i=0; i<5; i++) {
+            const lx = p.x + Math.random() * p.width;
+            const ly = p.y + p.height + Math.random() * 50;
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx, ly + 20);
+            ctx.stroke();
+        }
+    }
 
   }, [robotColor]);
 

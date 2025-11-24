@@ -4,6 +4,8 @@ export const GAME_HEIGHT = 600;
 export const PHYSICS = {
   GRAVITY: 0.4,
   JUMP_FORCE: -10,
+  BOOST_FORCE: -32, // Approx 10x height of normal jump
+  SLOW_MOTION_SCALE: 0.4, // Slow motion factor
   ACCELERATION: 0.8,
   MAX_SPEED: 10,
   FRICTION: 0.92,
@@ -20,6 +22,6 @@ export const COLORS = {
   PLAYER: '#34D399', // emerald-400
   PLATFORM_STATIC: '#60A5FA', // blue-400
   PLATFORM_MOVING: '#F472B6', // pink-400
-  PLATFORM_BREAKING: '#A78BFA', // purple-400
+  PLATFORM_BOOST: '#A78BFA', // purple-400
   BACKGROUND: '#111827', // gray-900
 };
