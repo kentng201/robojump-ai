@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai"; // Import purely for typing if need
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
+  console.log('gameState: ', gameState);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const fetchNewPersona = async () => {
     setLoadingPersona(true);
     const p = await generateRobotPersona();
+    console.log('p: ', p);
     setPersona(p);
     setLoadingPersona(false);
   };
@@ -138,7 +140,7 @@ const App: React.FC = () => {
             </div>
 
             <Button onClick={handleStartGame} disabled={loadingPersona} className="w-full max-w-xs text-lg">
-              INITIATE JUMP
+              START!
             </Button>
             
             <p className="mt-6 text-xs text-gray-500">
