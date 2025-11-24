@@ -1,15 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { Button } from './components/Button';
 import { GameState, RobotPersona } from './types';
 import { generateRobotPersona, generateGameOverMessage } from './services/geminiService';
-import { GoogleGenAI } from "@google/genai"; // Import purely for typing if needed, but we use the service
+import { initAudio, toggleMute, startMusic, stopMusic, playGameOverSound } from './services/audioService';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
-  console.log('gameState: ', gameState);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   
   // Robot Persona State
   const [persona, setPersona] = useState<RobotPersona | null>(null);
@@ -30,13 +31,15 @@ const App: React.FC = () => {
   const fetchNewPersona = async () => {
     setLoadingPersona(true);
     const p = await generateRobotPersona();
-    console.log('p: ', p);
     setPersona(p);
     setLoadingPersona(false);
   };
 
   const handleStartGame = () => {
-    console.log('Starting game...');
+    // Audio must be initialized on user interaction
+    initAudio();
+    startMusic();
+    
     setScore(0);
     setGameState(GameState.PLAYING);
     setGameOverMsg("");
@@ -48,6 +51,9 @@ const App: React.FC = () => {
 
   const handleGameOver = async (finalScore: number) => {
     setGameState(GameState.GAME_OVER);
+    stopMusic();
+    playGameOverSound();
+
     if (finalScore > highScore) {
       setHighScore(finalScore);
       localStorage.setItem('roboJumpHighscore', finalScore.toString());
@@ -58,19 +64,44 @@ const App: React.FC = () => {
     setGameOverMsg(msg);
   };
 
+  const handleToggleMute = () => {
+      const newMute = !isMuted;
+      setIsMuted(newMute);
+      toggleMute(newMute);
+      // If playing and unmuting, restart music
+      if (!newMute && gameState === GameState.PLAYING) {
+          startMusic();
+      }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 text-white font-sans p-4 relative">
       
       {/* Header / Score Display */}
-      <div className="absolute top-4 left-0 right-0 flex justify-between px-6 max-w-[500px] mx-auto z-10 w-full pointer-events-none">
-        <div className="bg-gray-800/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-emerald-500/30">
-          <span className="text-gray-400 text-xs uppercase tracking-wider block">Score</span>
-          <span className="text-2xl font-bold text-white font-mono">{score}</span>
+      <div className="absolute top-4 left-0 right-0 flex justify-between px-4 max-w-[500px] mx-auto z-10 w-full pointer-events-none">
+        <div className="flex gap-2">
+          <div className="bg-gray-800/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-emerald-500/30">
+            <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Score</span>
+            <span className="text-xl font-bold text-white font-mono leading-none">{score}</span>
+          </div>
+          <div className="bg-gray-800/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-purple-500/30">
+            <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Best</span>
+            <span className="text-xl font-bold text-purple-300 font-mono leading-none">{highScore}</span>
+          </div>
         </div>
-        <div className="bg-gray-800/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-purple-500/30">
-          <span className="text-gray-400 text-xs uppercase tracking-wider block">High Score</span>
-          <span className="text-xl font-bold text-purple-300 font-mono">{highScore}</span>
-        </div>
+
+        {/* Sound Toggle */}
+        <button 
+            onClick={handleToggleMute}
+            className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-lg border border-gray-600 hover:bg-gray-700 pointer-events-auto"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+        >
+            {isMuted ? (
+                <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+            ) : (
+                <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+            )}
+        </button>
       </div>
 
       {/* Main Game Canvas Container */}

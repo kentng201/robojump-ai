@@ -1,6 +1,8 @@
+
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { GameState, Player, Platform } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT, PHYSICS, COLORS } from '../constants';
+import { playJumpSound } from '../services/audioService';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -18,6 +20,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>(0);
   
+  // Ref to track game state inside event listeners without stale closures
+  const gameStateRef = useRef(gameState);
+  useEffect(() => {
+      gameStateRef.current = gameState;
+  }, [gameState]);
+
   // Mobile detection state
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
@@ -53,10 +61,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Touch controls for mobile (Background / Swipe logic)
     const handleTouchStart = (e: TouchEvent) => {
-      // Only handle if not clicking a button (though buttons stop prop, good to be safe)
-      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+      // CRITICAL FIX: Do not capture touch events if we are in a MENU or GAME_OVER state.
+      // This allows buttons (HTML elements overlay) to receive clicks properly.
+      if (gameStateRef.current !== GameState.PLAYING) return;
+
+      // Check if target is a button or part of UI
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('[role="button"]')) return;
       
-      e.preventDefault();
+      e.preventDefault(); // Only prevent default scrolling during gameplay
+      
       if (e.touches.length > 0) {
         const touchX = e.touches[0].clientX;
         const centerX = window.innerWidth / 2;
@@ -72,6 +86,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
+      if (gameStateRef.current !== GameState.PLAYING) return;
+      
       e.preventDefault();
       // Global release for safety
       keysRef.current['ArrowLeft'] = false;
@@ -205,10 +221,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     platformsRef.current = platformsRef.current.filter(p => p.y < GAME_HEIGHT);
 
     // BUG FIX: Safeguard against empty platforms array
-    // If all platforms are removed (e.g. super jump or glitch), regenerate them to fill screen
     if (platformsRef.current.length === 0) {
        const startY = GAME_HEIGHT;
-       // Fill screen with new platforms
        for (let y = startY; y > -100; y -= 100) {
            platformsRef.current.push(generatePlatform(y));
        }
@@ -236,11 +250,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ) {
           if (p.type === 'breaking') {
             p.active = false; // Break it
-            // Small hop?
-             player.vy = PHYSICS.JUMP_FORCE * 0.5;
+            player.vy = PHYSICS.JUMP_FORCE * 0.5;
+            playJumpSound();
           } else {
             // Bounce
             player.vy = PHYSICS.JUMP_FORCE;
+            playJumpSound();
           }
         }
       });
