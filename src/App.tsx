@@ -36,6 +36,7 @@ const App: React.FC = () => {
   };
 
   const handleStartGame = () => {
+    console.log('Starting game...');
     setScore(0);
     setGameState(GameState.PLAYING);
     setGameOverMsg("");

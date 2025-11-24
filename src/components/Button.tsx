@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ButtonProps {
-  onClick: () => void;
+  onClick?: () => void;
   children: React.ReactNode;
   variant?: 'primary' | 'secondary';
   disabled?: boolean;
@@ -22,9 +22,14 @@ export const Button: React.FC<ButtonProps> = ({
     secondary: "bg-gray-700 hover:bg-gray-600 text-gray-100 border border-gray-600",
   };
 
+  const handleClick = (event: React.MouseEvent | React.TouchEvent) => {
+    if (onClick) onClick(event);
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
+      onTouchStart={handleClick}
       disabled={disabled}
       className={`${baseStyles} ${variants[variant]} ${className}`}
     >
