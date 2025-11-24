@@ -215,10 +215,6 @@ const App: React.FC = () => {
           </div>
         )}
       </div>
-
-      <div className="mt-4 text-center text-gray-600 text-xs max-w-md">
-        Powered by React, Tailwind, and Google Gemini.
-      </div>
     </div>
   );
 };
